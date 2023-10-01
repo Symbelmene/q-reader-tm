@@ -88,6 +88,12 @@ def findMarks(im, barContours):
             label = textAbove
             if not label:
                 label = textBelow
+            if not label:
+                label = '1'
+
+            cv2.imshow(f'region {label}', im[y-(h+200):y+h+300, x+mark-150:x+mark+150])
+            cv2.waitKey()
+            cv2.destroyAllWindows()
 
             cv2.line(im, (x + mark, y), (x + mark, y + h), (0, 255, 0), 10)
             cv2.putText(im, str(round(score, 1)), (x + mark, y + h + 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 10)
@@ -124,10 +130,6 @@ def readText(textRegion, label):
             text = 'T'
         textStr += str(text)
 
-    cv2.imshow(f'{label} - {textStr}', textRegion)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
     return textStr
 
 
@@ -145,7 +147,7 @@ def loadFileFromInputDir(path):
     elif fType in ['jpg', 'png', 'bmp']:
         im = cv2.imread(path)
     else:
-        raise Exception(f'File type {fType} not supported. Please ensure files are .pdf, .jpg, .png or .bmp')
+        raise Exception(f'File type {fType} not supported. Please ensure files are .jpg, .png or .bmp')
     return im
 
 
