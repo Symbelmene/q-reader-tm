@@ -1,6 +1,7 @@
 import os
 import cv2
 import json
+import traceback
 import numpy as np
 from tqdm import tqdm
 
@@ -50,11 +51,11 @@ def findMarks(im, barContours):
         barPadInv = np.array([np.roll(col, -1*loc) for col, loc in zip(barPadInv.T, barLoc)]).T
 
         rowSums = np.sum(barPadInv, axis=1)
-        barLoc = np.where(rowSums > 0.3*np.max(rowSums))[0]
+        barLoc = np.where(rowSums > 0.7*np.max(rowSums))[0]
 
         # Take sample from just above and just below bar
-        topSampleLine = np.mean(barPadInv[np.max(barLoc)+10:np.max(barLoc)+20, :], axis=0)[10:-10]
-        botSampleLine = np.mean(barPadInv[np.min(barLoc)-20:np.min(barLoc)-10, :], axis=0)[10:-10]
+        topSampleLine = np.mean(barPadInv[np.max(barLoc)+10:np.max(barLoc)+15, :], axis=0)[10:-10]
+        botSampleLine = np.mean(barPadInv[np.min(barLoc)-15:np.min(barLoc)-10, :], axis=0)[10:-10]
         marks = topSampleLine + botSampleLine
 
         # Find values greater than 0.2 of max that are at least 100px apart
@@ -71,6 +72,9 @@ def findMarks(im, barContours):
                 currGroup = []
         if currGroup:
             markList.append(int(sum(currGroup) / len(currGroup)))
+
+        if len(markList) > 4:
+            x = 1
 
         for mark in markList:
             # Draw on imGrey & write score
@@ -127,6 +131,7 @@ def main():
             cv2.imwrite(f'{outDir}/{f}', annotatedIm)
         except:
             print(f'Encountered error while processing {f}. The file will be skipped')
+            print(traceback.format_exc())
             continue
 
     with open(f'{outDir}/bar_results.json', 'w') as f:

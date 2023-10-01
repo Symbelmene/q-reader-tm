@@ -8,14 +8,14 @@ Place image files (.jpg, .png, .bmp) in the `images` folder and run `main.py` to
 will be dumped to the output folder in the form of annotated images, and CSV & JSON files with the scores.
 
 ## Installation
-This code requires Python 3.8 or later. It is recommended to use a virtual environment to install the
+This code requires Python 3.10 or later. It is recommended to use a virtual environment to install the
 dependencies. You can do this using either conda, or pip venv. I would recommend using conda as it is
 easier to install the dependencies.
 
 ### Conda
 Install Anaconda (https://www.anaconda.com/download) on your system, then run the following commands in the terminal:
 ```
-conda create -n qreader python=3.8
+conda create -n qreader python=3.10
 conda activate qreader
 pip install -r requirements.txt
 ```
