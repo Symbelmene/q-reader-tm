@@ -1,7 +1,6 @@
 import os
 import cv2
 from pdf2image import convert_from_path
-from PIL import Image
 
 
 def loadPDFToImage(pdf_file):
