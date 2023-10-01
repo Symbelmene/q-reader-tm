@@ -4,9 +4,11 @@ import json
 import traceback
 import numpy as np
 from tqdm import tqdm
+from tensorflow import keras
 
 import utils
 
+textModel = keras.models.load_model('mnist_model.keras')
 
 def findBarsInImage(im):
     # Find horizontal lines in image
@@ -73,17 +75,60 @@ def findMarks(im, barContours):
         if currGroup:
             markList.append(int(sum(currGroup) / len(currGroup)))
 
-        if len(markList) > 4:
-            x = 1
-
         for mark in markList:
             # Draw on imGrey & write score
             score = 100 * mark / barPad.shape[1]
+
+            regionBelow = im[y+h-50:y+h+300, x+mark-150:x+mark+150]
+            regionAbove = im[y-(h+200):y+h-50, x+mark-150:x+mark+150]
+
+            textBelow = readText(regionBelow, 'below')
+            textAbove = readText(regionAbove, 'above')
+
+            label = textAbove
+            if not label:
+                label = textBelow
+
             cv2.line(im, (x + mark, y), (x + mark, y + h), (0, 255, 0), 10)
             cv2.putText(im, str(round(score, 1)), (x + mark, y + h + 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 10)
 
-        resultsDict[idx] = [round(100 * mark / barPad.shape[1], 2) for mark in markList]
+            resultsDict[idx] = [{'score': round(100 * mark / barPad.shape[1], 2),
+                                 'label': label} for mark in markList]
     return im, resultsDict
+
+
+def readText(textRegion, label):
+    textRegion = np.where((textRegion[:, :, 0] > 200) & (textRegion[:, :, 2] < 200), 255, 0).astype(np.uint8)
+    textRegion = cv2.GaussianBlur(textRegion, (5, 5), 0)
+    textRegion = cv2.erode(textRegion, np.ones((5, 5), np.uint8), iterations=1)
+    textRegion = cv2.dilate(textRegion, np.ones((5, 5), np.uint8), iterations=1)
+    textRegion = np.where(textRegion > 50, 255, 0).astype(np.uint8)
+
+    edges = cv2.Canny(textRegion, 50, 150, apertureSize=3)
+    cnts = list(cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0])
+    if not cnts:
+        return ''
+
+    cnts.sort(key=lambda x: cv2.boundingRect(x)[2] * cv2.boundingRect(x)[3], reverse=True)
+
+    textStr = ''
+    for cnt in cnts:
+        x, y, w, h = cv2.boundingRect(cnt)
+        if w*h < 0.05*textRegion.shape[0]*textRegion.shape[1]:
+            continue
+        im = cv2.resize(textRegion[y:y+h, x:x+w], (28, 28))
+        im = np.expand_dims(im, -1)
+        im = np.expand_dims(im, 0)
+        text = textModel.predict(im).argmax()
+        if text == 7:
+            text = 'T'
+        textStr += str(text)
+
+    cv2.imshow(f'{label} - {textStr}', textRegion)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    return textStr
 
 
 def findBarPositions(im):
@@ -105,11 +150,13 @@ def loadFileFromInputDir(path):
 
 
 def convertResultsToCSV(results):
-    csv = 'Filename,Bar,Score\n'
+    csv = 'Filename,Bar,Score,Label\n'
     for page, pageResults in results.items():
         for bar, barResults in pageResults.items():
             for result in barResults:
-                csv += f'{page},{bar},{result}\n'
+                score = result['score']
+                label = result['label']
+                csv += f'{page},{bar},{score},{label}\n'
     return csv
 
 
