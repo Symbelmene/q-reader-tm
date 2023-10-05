@@ -159,7 +159,7 @@ def main():
                 else:
                     indexedResults = {questionNumbers[k]: v for k, v in results.items()}
                     pageResults[pageNumber] = indexedResults
-                cv2.imwrite(f'{outDir}/{participantDir}/{f}', annotatedIm)
+                cv2.imwrite(f'{outDir}/{participantDir}/{pageNumber}.jpg', annotatedIm)
             except:
                 print(f'Encountered error while processing {f}. The file will be skipped')
                 print(traceback.format_exc())
