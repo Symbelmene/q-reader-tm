@@ -30,3 +30,31 @@ does not exist then you may have to create it) and then running:
 ```
 python main.py
 ```
+
+### Input Format
+Input files should be placed in the 'input' folder, (when running for the first time this folder will need to be created. The expected format is ./input/<participant_id>/<filename>.jpg. There is
+no limit to the number of participant directories that can be placed in the input folder. 
+
+Files within the participant ID directory should be .jpg, .png, or .bmp files. The code will automatically detect the files and process them. The file name
+order is important to match the template in the page_numbers_and_sequence.json, but providing the pages are scanned in a 
+similar order to the examples in test_sample.zip, then the code should work.
+
+(If the question numbers / orders are changed, then this can be manually updated in the page_numbers_and_sequence.json file)
+
+
+### Output Format
+The output will be placed in the 'output' folder, which will be automatically created if it does not exist. The output folder
+will contain a directory for each participant ID, along with a CSV file containing combined scores for all participants.
+
+Each output participant ID directory will contain annotated images of the scanned pages with the marks on the bars detected
+and scored. It will also contain a CSV and a JSON file with the scores for each participant (N.B. this is just a duplicate of the
+participant data in the combined CSV file).
+
+
+### Reformatted Output
+The output can be reformmated to a more readable format using the reformat_output.py script. This will create a new file
+in the output directory called reformatted_output.csv. This file will contain the data from bar_results.csv, but pivoted such
+that each row is a participant, and questions with marks (e.g. Q2.2_1) are the columns, with scores as the cells.
+
+
+

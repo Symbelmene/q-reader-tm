@@ -181,6 +181,7 @@ def main():
         dfList.append(df)
     df = pd.concat(dfList)
     df = df[['Participant ID', 'Page No.', 'Question No.', 'Score(%)']]
+    df['Mark'] = None
     df.to_csv(f'{outDir}/bar_results.csv', index=False)
 
 
