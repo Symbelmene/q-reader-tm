@@ -1,8 +1,11 @@
 import os
+import shutil
+
 import cv2
 import json
 import traceback
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 import utils
@@ -20,7 +23,7 @@ def findBarsInImage(im):
         x, y, w, h = cv2.boundingRect(cnt)
         if w > 10 * h and w > im.shape[1] / 2:
             lineContours.append(cnt)
-
+            cv2.drawContours(im, [cnt], 0, (0, 255, 0), 3)
     return lineContours
 
 
@@ -34,17 +37,18 @@ def findMarks(im, barContours):
         barInv = cv2.bitwise_not(bar)
         barInv = cv2.dilate(barInv, np.ones((5, 5), np.uint8), iterations=2)
         barInv = cv2.erode(barInv, np.ones((5, 5), np.uint8), iterations=2)
-        barThresh = np.where(barInv > 200, 255, 0).astype(np.uint8)
+        barThresh = np.where(barInv > 100, 255, 0).astype(np.uint8)
         barLoc = (barThresh!=0).argmax(axis=0)
 
         # Take rolling average of barLoc
         barLoc = np.convolve(barLoc, np.ones(5)/5, mode='same').astype(int)
 
-        # Shift each column in array by corresponding value in barLoc
         maxShift = np.max(barLoc)
 
-        barPad = imGrey[y-maxShift:y+h+maxShift, x:x+w]
+        barPad = imGrey[y-50:y+h+50, x:x+w]
+
         barPadInv = cv2.bitwise_not(barPad)
+        barPadInv = np.where(barPadInv > 100, 255, 0).astype(np.uint8)
         barPadInv = cv2.dilate(barPadInv, np.ones((5, 5), np.uint8), iterations=2)
         barPadInv = cv2.erode(barPadInv, np.ones((5, 5), np.uint8), iterations=2)
 
@@ -54,8 +58,9 @@ def findMarks(im, barContours):
         barLoc = np.where(rowSums > 0.7*np.max(rowSums))[0]
 
         # Take sample from just above and just below bar
-        topSampleLine = np.mean(barPadInv[np.max(barLoc)+10:np.max(barLoc)+15, :], axis=0)[10:-10]
-        botSampleLine = np.mean(barPadInv[np.min(barLoc)-15:np.min(barLoc)-10, :], axis=0)[10:-10]
+        topSampleLine = np.mean(barPadInv[np.max(barLoc)+10:np.max(barLoc)+25, :], axis=0)[10:-10]
+        botSampleLine = np.mean(barPadInv[np.min(barLoc)-25:np.min(barLoc)-10, :], axis=0)[10:-10]
+
         marks = topSampleLine + botSampleLine
 
         # Find values greater than 0.2 of max that are at least 100px apart
@@ -73,16 +78,13 @@ def findMarks(im, barContours):
         if currGroup:
             markList.append(int(sum(currGroup) / len(currGroup)))
 
-        if len(markList) > 4:
-            x = 1
-
         for mark in markList:
             # Draw on imGrey & write score
             score = 100 * mark / barPad.shape[1]
             cv2.line(im, (x + mark, y), (x + mark, y + h), (0, 255, 0), 10)
-            cv2.putText(im, str(round(score, 1)), (x + mark, y + h + 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 10)
+            cv2.putText(im, str(round(score)), (x + mark, y + h + 80), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 255, 0), 10)
 
-        resultsDict[idx] = [round(100 * mark / barPad.shape[1], 2) for mark in markList]
+        resultsDict[idx] = [round(100 * mark / barPad.shape[1]) for mark in markList]
     return im, resultsDict
 
 
@@ -105,40 +107,81 @@ def loadFileFromInputDir(path):
 
 
 def convertResultsToCSV(results):
-    csv = 'Filename,Bar,Score\n'
+    csv = 'Page No.,Question No.,Score(%)\n'
     for page, pageResults in results.items():
         for bar, barResults in pageResults.items():
             for result in barResults:
                 csv += f'{page},{bar},{result}\n'
+            if len(barResults) < 4:
+                for _ in range(4 - len(barResults)):
+                    csv += f'{page},{bar},\n'
     return csv
+
+
+def readPageSequence():
+    with open('page_numbers_and_sequence.json', 'r') as f:
+        pageSequence = json.load(f)
+    return pageSequence
 
 
 def main():
     inputDir = 'input'
 
-    outDir = 'output/bar_questions_marked_annotated'
-    if not os.path.exists(outDir):
-        os.makedirs(outDir)
+    outDir = 'output'
+    if os.path.exists(outDir):
+        shutil.rmtree(outDir)
 
-    pageResults = {}
-    for f in tqdm(os.listdir(inputDir)):
-        try:
-            fPath = f'{inputDir}/{f}'
-            im = loadFileFromInputDir(fPath)
+    PAGE_DICT  = readPageSequence()
+    PAGE_ORDER = PAGE_DICT['pageSequence']
+    PAGE_QUESTIONS = PAGE_DICT['pageQuestions']
 
-            annotatedIm, results = findBarPositions(im)
-            pageResults[f] = results
-            cv2.imwrite(f'{outDir}/{f}', annotatedIm)
-        except:
-            print(f'Encountered error while processing {f}. The file will be skipped')
-            print(traceback.format_exc())
-            continue
+    for participantDir in os.listdir(inputDir):
+        participantPath = f'{inputDir}/{participantDir}'
+        outputPath = f'{outDir}/{participantDir}'
 
-    with open(f'{outDir}/bar_results.json', 'w') as f:
-        json.dump(pageResults, f)
+        if not os.path.exists(outputPath):
+            os.makedirs(outputPath)
 
-    with open(f'{outDir}/bar_results.csv', 'w') as f:
-        f.write(convertResultsToCSV(pageResults))
+        pageResults = {}
+        for idx, f in tqdm(enumerate(os.listdir(participantPath)), total=len(os.listdir(participantPath))):
+            try:
+                fPath = f'{participantPath}/{f}'
+                im = loadFileFromInputDir(fPath)
+                pageNumber = PAGE_ORDER[idx]
+                questionNumbers = PAGE_QUESTIONS[str(pageNumber)]
+
+                annotatedIm, results = findBarPositions(im)
+
+                if len(questionNumbers) != len(results):
+                    print(f'WARNING: Number of questions on page {pageNumber} does not match number of results found. \n'
+                          f'Questions will not be marked!')
+                    pageResults[pageNumber] = results
+                else:
+                    indexedResults = {questionNumbers[k]: v for k, v in results.items()}
+                    pageResults[pageNumber] = indexedResults
+                cv2.imwrite(f'{outDir}/{participantDir}/{f}', annotatedIm)
+            except:
+                print(f'Encountered error while processing {f}. The file will be skipped')
+                print(traceback.format_exc())
+                continue
+
+        pageResults = {k: v for k, v in sorted(pageResults.items(), key=lambda item: int(item[0]))}
+        with open(f'{outputPath}/bar_results.json', 'w') as f:
+            json.dump(pageResults, f)
+
+        with open(f'{outputPath}/bar_results.csv', 'w') as f:
+            f.write(convertResultsToCSV(pageResults))
+
+    # Merge participant output CSVs into single and add participant ID column
+    dfList = []
+    for participantDir in os.listdir(outDir):
+        participantPath = f'{outDir}/{participantDir}'
+        df = pd.read_csv(f'{participantPath}/bar_results.csv')
+        df['Participant ID'] = participantDir
+        dfList.append(df)
+    df = pd.concat(dfList)
+    df = df[['Participant ID', 'Page No.', 'Question No.', 'Score(%)']]
+    df.to_csv(f'{outDir}/bar_results.csv', index=False)
 
 
 if __name__ == '__main__':
